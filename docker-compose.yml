@@ -1,0 +1,72 @@
+# n8n com FFmpeg + PostgreSQL
+# Deploy: Portainer (Repository) ou docker compose up -d --build
+
+services:
+  n8n-postgres:
+    image: postgres:16-alpine
+    container_name: n8n-postgres
+    environment:
+      POSTGRES_USER: ${N8N_DB_USER:-n8n}
+      POSTGRES_PASSWORD: ${N8N_DB_PASSWORD:?Defina N8N_DB_PASSWORD no .env}
+      POSTGRES_DB: ${N8N_DB_NAME:-n8n_db}
+    volumes:
+      - n8n_postgres_data:/var/lib/postgresql/data
+    networks:
+      - n8nnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${N8N_DB_USER:-n8n}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    build:
+      context: ./docker/n8n
+      dockerfile: Dockerfile
+    image: n8n-ffmpeg:latest
+    container_name: n8n
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n_db}
+      DB_POSTGRESDB_USER: ${N8N_DB_USER:-n8n}
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?Defina N8N_DB_PASSWORD no .env}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:?Defina N8N_BASIC_AUTH_PASSWORD no .env}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: ${N8N_EXECUTIONS_DATA_SAVE_ON_SUCCESS:-all}
+      EXECUTIONS_DATA_SAVE_ON_ERROR: ${N8N_EXECUTIONS_DATA_SAVE_ON_ERROR:-all}
+      EXECUTIONS_TIMEOUT: ${N8N_EXECUTIONS_TIMEOUT:-3600}
+      GENERIC_FUNCTION_TIMEOUT: ${N8N_GENERIC_FUNCTION_TIMEOUT:-120}
+      N8N_PROXY_HOPS: 1
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - n8nnet
+    depends_on:
+      n8n-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  n8nnet:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    driver: local
+  n8n_postgres_data:
+    driver: local

@@ -51,6 +51,7 @@ services:
       - n8n_data:/home/node/.n8n
     networks:
       - n8nnet
+      - proxy_net
     depends_on:
       n8n-postgres:
         condition: service_healthy
@@ -64,6 +65,8 @@ services:
 networks:
   n8nnet:
     driver: bridge
+  proxy_net:
+    external: true
 
 volumes:
   n8n_data:
